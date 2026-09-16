@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vidoora AI - Admin Dashboard</title>
+  <style>
+    body { font-family: sans-serif; background: #0f172a; color: #fff; padding: 20px; }
+    .card { background: #1e293b; padding: 20px; border-radius: 8px; max-width: 800px; margin: auto; }
+    input, button { padding: 10px; border-radius: 5px; border: none; font-size: 16px; }
+    input { width: 60%; background: #334155; color: #fff; }
+    button { background: #3b82f6; color: white; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #334155; padding: 8px; text-align: left; font-size: 14px; }
+    th { background: #0284c7; }
+    .badge { padding: 3px 8px; border-radius: 4px; font-size: 12px; }
+    .completed { background: #16a34a; }
+    .queued { background: #eab308; color: black; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Vidoora AI Admin Panel</h2>
+    <div id="login-sec">
+      <input type="password" id="pass" placeholder="Admin Password dalein">
+      <button onclick="loadAdmin()">Login</button>
+      <p id="err" style="color:red;"></p>
+    </div>
+
+    <div id="dashboard" style="display:none;">
+      <p>Total Generated Prompts: <strong id="total">0</strong></p>
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Prompt</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="jobRows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    async function loadAdmin() {
+      const pass = document.getElementById("pass").value;
+      const res = await fetch("/api/admin/data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pass })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById("err").innerText = data.error || "Login Failed";
+        return;
+      }
+      document.getElementById("login-sec").style.display = "none";
+      document.getElementById("dashboard").style.display = "block";
+      document.getElementById("total").innerText = data.totalJobs;
+
+      const tbody = document.getElementById("jobRows");
+      tbody.innerHTML = data.jobs.map(j => `
+        <tr>
+          <td>${new Date(j.createdAt).toLocaleTimeString()}</td>
+          <td>${j.prompt}</td>
+          <td><span class="badge ${j.status}">${j.status}</span></td>
+        </tr>
+      `).join("");
+    }
+  </script>
+</body>
+</html>
