@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vidoora AI</title>
+<style>
+body{margin:0;background:#070a12;color:#f5f7ff;font-family:system-ui,Arial}
+.wrap{max-width:900px;margin:auto;padding:24px}
+nav{display:flex;justify-content:space-between;align-items:center;padding:10px 0 40px}
+.logo{font-size:25px;font-weight:800}.logo i{color:#8b7cff;font-style:normal}
+h1{text-align:center;font-size:clamp(36px,7vw,64px);line-height:1.1;margin:0}
+.grad{color:#8b7cff}
+.sub{text-align:center;color:#9ba5bb;max-width:650px;margin:15px auto 30px;font-size:17px}
+.card{background:#101523;border:1px solid #273047;border-radius:22px;padding:24px}
+textarea{width:100%;height:140px;box-sizing:border-box;background:#090e19;color:white;border:1px solid #303a52;border-radius:15px;padding:16px;font-size:16px;resize:vertical}
+.controls{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+select,button{padding:13px;border-radius:12px;font-size:15px}
+select{background:#090e19;color:white;border:1px solid #303a52;flex:1}
+button{border:0;background:#8b7cff;color:white;font-weight:700;flex:2;cursor:pointer}
+button:hover{background:#7968ff}
+#box{display:none;margin-top:20px;padding:18px;background:#0a1020;border-radius:14px;border:1px solid #1e283d}
+.bar{height:10px;background:#202a40;border-radius:10px;overflow:hidden;margin:12px 0}
+.fill{height:100%;width:0;background:#22c55e;transition:width 0.4s ease}
+#status{font-size:15px;color:#cbd5e1}
+
+/* Video Player Box Styling */
+#videoResult{display:none;margin-top:20px;text-align:center;background:#131b2e;padding:18px;border-radius:14px;border:1px solid #273047}
+video{width:100%;max-width:640px;border-radius:10px;margin-top:12px;outline:none;background:#000}
+.dl-btn{display:inline-block;margin-top:12px;padding:10px 20px;background:#22c55e;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;font-size:14px}
+
+#scenes{max-height:250px;overflow-y:auto;margin-top:18px;padding-right:8px}
+.scene{padding:10px;margin-bottom:8px;background:#131b2e;border-radius:8px;border-left:3px solid #8b7cff;color:#cbd5e1;font-size:13px;line-height:1.4}
+small{color:#77839a}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <div class="logo">Vidoora <i>AI</i></div>
+    <small>Demo Video Engine</small>
+  </nav>
+  <h1>One Prompt.<br><span class="grad">One Complete Video.</span></h1>
+  <p class="sub">AI long-form video planner & generator prototype.</p>
+  
+  <div class="card">
+    <textarea id="p" placeholder="Apna video prompt yahan likhein..."></textarea>
+    
+    <div class="controls">
+      <select id="l">
+        <option>Hindi</option>
+        <option>English</option>
+        <option>Hinglish</option>
+      </select>
+      <select id="d">
+        <option>5 minutes</option>
+        <option>8 minutes</option>
+        <option>10 minutes</option>
+      </select>
+      <select id="a">
+        <option>16:9</option>
+        <option>9:16</option>
+      </select>
+      <button onclick="go()">✨ Generate Video</button>
+    </div>
+
+    <div id="box">
+      <div style="display:flex;justify-content:space-between;">
+        <b id="status">Starting pipeline...</b>
+        <span id="pct" style="color:#22c55e;font-weight:bold;">0%</span>
+      </div>
+      <div class="bar">
+        <div class="fill" id="fill"></div>
+      </div>
+
+      <!-- Sample Video Display Section -->
+      <div id="videoResult">
+        <h3 style="margin:0;color:#22c55e;">🎉 Video Ready!</h3>
+        <video id="player" controls playsinline>
+          <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+          Browser video tag support nahi karta.
+        </video>
+        <div>
+          <a class="dl-btn" href="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" download="Vidoora_AI_Video.mp4">⬇ Download Video</a>
+        </div>
+      </div>
+
+      <div id="scenes"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function go(){
+  const prompt = p.value.trim();
+  if(!prompt){
+    alert("Please enter a prompt.");
+    return;
+  }
+  
+  box.style.display = "block";
+  videoResult.style.display = "none";
+  scenes.innerHTML = "";
+  fill.style.width = "5%";
+  pct.textContent = "5%";
+  status.textContent = "Processing prompt...";
+  
+  try {
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        prompt: prompt,
+        language: l.value,
+        duration: d.value,
+        aspectRatio: a.value
+      })
+    });
+    
+    if(!res.ok){
+      status.textContent = "Could not start job. Try again.";
+      return;
+    }
+    
+    const data = await res.json();
+    poll(data.jobId);
+  } catch(err) {
+    status.textContent = "Network error while connecting.";
+  }
+}
+
+async function poll(id){
+  try {
+    const res = await fetch("/api/jobs/" + id);
+    if(!res.ok) return;
+    const j = await res.json();
+    
+    const progress = j.progress || 0;
+    fill.style.width = progress + "%";
+    pct.textContent = progress + "%";
+    
+    const rawStatus = (j.status || "").replace(/_/g, " ").toUpperCase();
+    status.textContent = rawStatus;
+    
+    if(j.scenes && j.scenes.length > 0){
+      scenes.innerHTML = j.scenes.map(s => `
+        <div class="scene">
+          <b>Scene ${s.scene} (${s.durationSeconds}s):</b> ${s.prompt}
+        </div>
+      `).join("");
+    }
+    
+    if(j.status !== "completed"){
+      setTimeout(() => poll(id), 800);
+    } else {
+      fill.style.width = "100%";
+      pct.textContent = "100%";
+      status.textContent = "✅ Video Generation Complete!";
+      
+      // Video Player show aur play karna
+      videoResult.style.display = "block";
+      const player = document.getElementById("player");
+      player.load();
+    }
+  } catch(e) {
+    setTimeout(() => poll(id), 1200);
+  }
+}
+</script>
+</body>
+            </html>
