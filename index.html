@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vidoora AI</title>
+<style>
+body{margin:0;background:#070a12;color:#f5f7ff;font-family:system-ui,Arial}
+.wrap{max-width:850px;margin:auto;padding:24px}
+nav{display:flex;justify-content:space-between;align-items:center;padding:10px 0 30px}
+.logo{font-size:24px;font-weight:800}.logo i{color:#8b7cff;font-style:normal}
+h1{text-align:center;font-size:clamp(30px,6vw,50px);line-height:1.1;margin:0}
+.grad{color:#8b7cff}
+.sub{text-align:center;color:#9ba5bb;max-width:600px;margin:12px auto 25px;font-size:15px}
+.card{background:#101523;border:1px solid #273047;border-radius:20px;padding:20px}
+textarea{width:100%;height:110px;box-sizing:border-box;background:#090e19;color:white;border:1px solid #303a52;border-radius:14px;padding:14px;font-size:15px;resize:vertical}
+.controls{display:flex;gap:10px;margin-top:12px}
+button{width:100%;padding:14px;border-radius:12px;font-size:16px;border:0;background:#8b7cff;color:white;font-weight:700;cursor:pointer}
+button:hover{background:#7968ff}
+#box{display:none;margin-top:20px;padding:16px;background:#0a1020;border-radius:14px;border:1px solid #1e283d}
+.bar{height:10px;background:#202a40;border-radius:10px;overflow:hidden;margin:12px 0}
+.fill{height:100%;width:0;background:#22c55e;transition:width 0.3s ease}
+#status{font-size:14px;color:#cbd5e1}
+
+#videoResult{display:none;margin-top:20px;text-align:center;background:#0d1322;padding:16px;border-radius:16px;border:1px solid #273047}
+.canvas-wrap{position:relative;width:100%;max-width:640px;margin:10px auto;border-radius:12px;overflow:hidden;background:#000}
+canvas{width:100%;display:block;aspect-ratio:16/9}
+.player-controls{display:flex;justify-content:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.p-btn{background:#8b7cff;border:none;color:white;padding:10px 18px;border-radius:8px;font-weight:bold;cursor:pointer}
+.dl-btn{background:#22c55e;border:none;color:white;padding:10px 20px;border-radius:8px;font-weight:bold;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <div class="logo">Vidoora <i>AI</i></div>
+    <small>100% Free Video Mode</small>
+  </nav>
+  <h1>One Prompt.<br><span class="grad">Free AI Video.</span></h1>
+  <p class="sub">Bina kisi token ya kharche ke prompt se match hone wali video generate karein.</p>
+  
+  <div class="card">
+    <textarea id="p" placeholder="Apna prompt yahan likhein (jaise: ek pyasa kauwa jungle me ghade me kankad daal raha hai)..."></textarea>
+    
+    <div class="controls">
+      <button onclick="go()">✨ Generate Video</button>
+    </div>
+
+    <div id="box">
+      <div style="display:flex;justify-content:space-between;">
+        <b id="status">AI frames generate kar raha hai...</b>
+        <span id="pct" style="color:#22c55e;font-weight:bold;">0%</span>
+      </div>
+      <div class="bar">
+        <div class="fill" id="fill"></div>
+      </div>
+
+      <div id="videoResult">
+        <h3 style="margin:0 0 10px 0;color:#22c55e;">🎉 Aapki Video Ready Hai!</h3>
+        <div class="canvas-wrap">
+          <canvas id="vCanvas" width="1280" height="720"></canvas>
+        </div>
+        <div class="player-controls">
+          <button class="p-btn" onclick="togglePlay()" id="playBtn">⏸ Pause</button>
+          <button class="p-btn" style="background:#475569;" onclick="restartVideo()">🔄 Replay</button>
+          <button class="dl-btn" onclick="downloadVideo()">⬇ Download Video</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let sceneImages = [];
+let isPlaying = false;
+let currentSceneIndex = 0;
+let sceneProgress = 0;
+let animId = null;
+
+async function go(){
+  const prompt = p.value.trim();
+  if(!prompt){
+    alert("Please prompt likhein.");
+    return;
+  }
+  
+  box.style.display = "block";
+  videoResult.style.display = "none";
+  fill.style.width = "10%";
+  pct.textContent = "10%";
+  status.textContent = "Free AI prompt process kar raha hai...";
+
+  const scenes = [
+    `${prompt}, establishing cinematic wide shot, photorealistic 8k`,
+    `${prompt}, close-up detailed action shot, cinematic lighting`,
+    `${prompt}, dynamic motion angle, realistic photography`,
+    `${prompt}, dramatic climax scene, studio lighting 4k`
+  ];
+
+  sceneImages = [];
+  let loaded = 0;
+
+  for(let i = 0; i < scenes.length; i++){
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    const seed = Math.floor(Math.random() * 999999);
+    img.src = `https://image.pollinations.ai/prompt/${encodeURIComponent(scenes[i])}?width=1280&height=720&nologo=true&seed=${seed}`;
+    
+    img.onload = () => {
+      loaded++;
+      const pVal = Math.floor((loaded / scenes.length) * 95);
+      fill.style.width = pVal + "%";
+      pct.textContent = pVal + "%";
+      if(loaded === scenes.length) startFinishedPlayer();
+    };
+    img.onerror = () => {
+      loaded++;
+      if(loaded === scenes.length) startFinishedPlayer();
+    };
+    sceneImages.push({ img });
+  }
+}
+
+function startFinishedPlayer(){
+  fill.style.width = "100%";
+  pct.textContent = "100%";
+  status.textContent = "✅ Video Ready!";
+  videoResult.style.display = "block";
+  startVideo();
+}
+
+function startVideo(){
+  currentSceneIndex = 0;
+  sceneProgress = 0;
+  isPlaying = true;
+  document.getElementById("playBtn").textContent = "⏸ Pause";
+  if(animId) cancelAnimationFrame(animId);
+  loop();
+}
+
+function loop(){
+  if(!isPlaying) return;
+  const canvas = document.getElementById("vCanvas");
+  const ctx = canvas.getContext("2d");
+  const current = sceneImages[currentSceneIndex];
+
+  if(current && current.img.complete && current.img.naturalWidth > 0){
+    const w = canvas.width;
+    const h = canvas.height;
+    const scale = 1.0 + (sceneProgress * 0.12);
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.save();
+    ctx.translate(w/2, h/2);
+    ctx.scale(scale, scale);
+    ctx.drawImage(current.img, -w/2, -h/2, w, h);
+    ctx.restore();
+
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(20, h - 60, 220, 40);
+    ctx.fillStyle = "#22c55e";
+    ctx.font = "bold 20px system-ui";
+    ctx.fillText(`Scene ${currentSceneIndex + 1} of ${sceneImages.length}`, 35, h - 33);
+  }
+
+  sceneProgress += 0.005;
+  if(sceneProgress >= 1){
+    sceneProgress = 0;
+    currentSceneIndex = (currentSceneIndex + 1) % sceneImages.length;
+  }
+
+  animId = requestAnimationFrame(loop);
+}
+
+function togglePlay(){
+  isPlaying = !isPlaying;
+  document.getElementById("playBtn").textContent = isPlaying ? "⏸ Pause" : "▶ Play";
+  if(isPlaying) loop();
+}
+
+function restartVideo(){
+  startVideo();
+}
+
+function downloadVideo(){
+  const canvas = document.getElementById("vCanvas");
+  const stream = canvas.captureStream(30);
+  let rec;
+  try {
+    rec = new MediaRecorder(stream, { mimeType: 'video/webm' });
+  } catch(e) {
+    rec = new MediaRecorder(stream);
+  }
+  const parts = [];
+  rec.ondataavailable = e => parts.push(e.data);
+  rec.onstop = () => {
+    const blob = new Blob(parts, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'AI_Video.webm';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  restartVideo();
+  rec.start();
+  status.textContent = "Video file save ho rahi hai (5 sec)...";
+  setTimeout(() => {
+    rec.stop();
+    status.textContent = "✅ Download Complete!";
+  }, 6000);
+}
+</script>
+</body>
+  </html>
